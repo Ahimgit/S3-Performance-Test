@@ -6,11 +6,12 @@ import de.jeha.s3pt.OperationResult;
 import de.jeha.s3pt.operations.data.ObjectKeys;
 import de.jeha.s3pt.operations.data.S3ObjectKeysDataProvider;
 import de.jeha.s3pt.operations.data.SingletonFileObjectKeysDataProvider;
+import java.io.IOException;
+import java.io.InputStream;
+import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.time.StopWatch;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.io.IOException;
 
 /**
  * @author jenshadlich@googlemail.com
@@ -23,12 +24,14 @@ public class RandomRead extends AbstractOperation {
     private final String bucket;
     private final int n;
     private final String keyFileName;
+    private final Boolean consume;
 
-    public RandomRead(AmazonS3 s3Client, String bucket, int n, String keyFileName) {
+    public RandomRead(AmazonS3 s3Client, String bucket, int n, String keyFileName, Boolean consume) {
         this.s3Client = s3Client;
         this.bucket = bucket;
         this.n = n;
         this.keyFileName = keyFileName;
+        this.consume = consume;
     }
 
     @Override
@@ -51,6 +54,13 @@ public class RandomRead extends AbstractOperation {
             stopWatch.start();
 
             S3Object object = s3Client.getObject(bucket, randomKey);
+            if (consume) {
+                try (InputStream stream = object.getObjectContent()) {
+                    IOUtils.skipFully(stream, object.getObjectMetadata().getContentLength());
+                } catch (IOException e) {
+                    LOG.warn("An exception occurred while reading object with key: {}", randomKey);
+                }
+            }
             try {
                 object.close();
             } catch (IOException e) {
